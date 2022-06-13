@@ -57,8 +57,8 @@ Now there is only one more thing to do before you can use JabRSS: you have to au
 TEXT_HELP = '''\
 Supported commands:
 
-subscribe http://host.domain/path/feed.rss
-unsubscribe http://host.domain/path/feed.rss
+subscribe http://host.domain/path/feed.rss    || add http://host.domain/path/feed.rss
+unsubscribe http://host.domain/path/feed.rss  || del http://host.domain/path/feed.rss
 info http://host.domain/path/feed.rss
 list
 set ( plaintext | chat | headline )
@@ -67,9 +67,9 @@ set header [ Title ] [ URL ]
 set subject  [ Title ] [ URL ]
 set size_limit <num>
 set store_messages <num>
-configuration
-show statistics
-show usage
+configuration   || conf
+show statistics || statistics || stats
+show usage      || usage
 
 Please refer to the JabRSS command reference at http://dev.cmeerw.org/jabrss/Documentation for more information.
 
@@ -635,7 +635,7 @@ class JabberUser:
     def set_delivery_state(self, state):
         self._configuration = (self._configuration & ~0x001c) | ((state & 7) << 2)
         self._update_configuration()
-        
+
 
     def _update_configuration(self):
         with Cursor(db) as cursor:
@@ -1613,16 +1613,20 @@ class JabRSSStream(XmppStream):
                     return self._process_list(stanza, user)
                 elif body[:4] == 'set ':
                     return self._process_set(stanza, user, body[4:])
-                elif (body == 'configuration') or (body == 'config'):
+                elif (body == 'configuration') or (body == 'conf'):
                     return self._process_config(stanza, user)
-                elif (body == 'statistics') or (body == 'show statistics'):
+                elif (body == 'stats') or (body == 'statistics') or (body == 'show statistics'):
                     return self._process_statistics(stanza, user)
                 elif (body == 'usage') or (body == 'show usage'):
                     return self._process_usage(stanza, user)
                 elif body[:10] == 'subscribe ':
                     return self._process_subscribe(stanza, user, body[10:])
+                elif body[:4] == 'add ':
+                    return self._process_subscribe(stanza, user, body[4:])
                 elif body[:12] == 'unsubscribe ':
                     return self._process_unsubscribe(stanza, user, body[12:])
+                elif body[:4] == 'del ':
+                    return self._process_unsubscribe(stanza, user, body[4:])
                 elif body[:5] == 'info ':
                     return self._process_info(stanza, user, body[5:])
                 else:
@@ -1874,7 +1878,7 @@ class JabRSSStream(XmppStream):
             for item in items:
                 try:
                     title, link, descr = (item.title, item.link, item.descr_plain)
-                    
+
                     if not descr or (descr == title):
                         body.append('%s\n%s\n' % (title, link))
                     else:

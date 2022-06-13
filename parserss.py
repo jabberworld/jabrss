@@ -1,6 +1,6 @@
 #!/usr/bin/python
-# Copyright (C) 2001-2014, Christof Meerwald
-# http://jabrss.cmeerw.org
+# Copyright (C) 2001-2020, Christof Meerwald
+# https://jabrss.cmeerw.org
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -97,7 +97,7 @@ class Null_Synchronizer:
 
 # configuration settings
 INTERVAL_DIVIDER = 3
-MIN_INTERVAL = 45*60
+MIN_INTERVAL = 1*60
 MAX_INTERVAL = 24*60*60
 MAX_XML_SIZE = 4 * 1024 * 1024
 DB_FILENAME = 'parserss.db'
@@ -1017,7 +1017,7 @@ class RSS_Resource:
         last_updated, last_modified, invalid_since = self._last_updated, self._last_modified, self._invalid_since
         if last_modified == None:
             last_modified = 0
-    
+
         return last_updated, last_modified, invalid_since
 
     def redirect_info(self, res_db=None):
@@ -1083,6 +1083,7 @@ class RSS_Resource:
         redirect_resource = None
         redirect_seq = None
         redirects = []
+        visited = {}
 
         with Cursor(db) as cursor:
             try:
@@ -1094,6 +1095,7 @@ class RSS_Resource:
 
                     if redirect_permanent:
                         redirect_url = url_protocol + '://' + url_host + url_path
+
                         if redirect_url != self._url:
                             redirect_resource, redirects = redirect_cb(redirect_url, db, -redirect_tries + 1, self._generate_id, self._connect_timeout, self._timeout)
 
@@ -1125,6 +1127,13 @@ class RSS_Resource:
                         headers['If-Modified-Since'] = formatdate(self._last_modified, usegmt=True)
                     if self._etag != None:
                         headers['If-None-Match'] = self._etag
+
+                    k = (url_protocol, url_host, url_path)
+                    if k in visited:
+                        error_info = 'redirect cycle %s://%s%s' % k
+                        break
+                    else:
+                        visited[k] = True
 
                     response = sess.get('%s://%s%s' % (url_protocol, url_host,
                                                        url_path),
@@ -1185,7 +1194,7 @@ class RSS_Resource:
                         else:
                             error_log = rss_parser.get_error_log()
                             if error_log:
-                                logger.warn('XML parser error log:\n%s' % (error_log,))
+                                logger.warning('XML parser error log:\n%s' % (error_log,))
 
                             new_channel_info = normalize_obj(rss_parser.get_info())
 
@@ -1222,14 +1231,13 @@ class RSS_Resource:
                             base_url = '%s://%s/%s' % (url_protocol, url_host, url_path)
                             redirect_url = urljoin(base_url, redirect_url)
                             logger.info('Following redirect (%d) to "%s"' % (errcode, redirect_url))
-                            url_protocol, url_host, url_path = split_url(redirect_url)
                             redirect_tries = -redirect_tries
                         else:
                             error_info = 'HTTP: %d %s' % (errcode, repr(errmsg))
-                            logger.warn(error_info + '\n' + str(headers))
+                            logger.warning(error_info + '\n' + str(headers))
                     else:
                         error_info = 'HTTP: %d %s' % (errcode, repr(errmsg))
-                        logger.warn(error_info + '\n' + str(headers))
+                        logger.warning(error_info + '\n' + str(headers))
 
                 if self._invalid_since and not error_info and redirect_tries == 0:
                     error_info = 'redirect: maximum number of redirects exceeded'
@@ -1257,7 +1265,7 @@ class RSS_Resource:
                 traceback.print_exc(file=sys.stdout)
 
             if error_info:
-                logger.warn('Error: %s' % (error_info,))
+                logger.warning('Error: %s' % (error_info,))
 
             if error_info != self._err_info:
                 self._err_info = error_info
@@ -1328,32 +1336,32 @@ class RSS_Resource:
 
         with cleanup:
             cursor.begin()
-    
+
             if len(items) > RSS_Resource.NR_ITEMS:
                 first_item_id += len(items) - RSS_Resource.NR_ITEMS
                 del items[:-RSS_Resource.NR_ITEMS]
                 cursor.execute('DELETE FROM resource_data WHERE rid=? AND seq_nr<?',
                                (self._id, first_item_id))
-    
+
             # RSS resource is valid
             self._invalid_since = None
-    
+
             if nr_new_items:
                 # update history information
                 self._history.append((int(time.time()), nr_new_items))
                 self._history = self._history[-16:]
-    
+
                 history_times = [ x[0] for x in self._history ]
                 if len(history_times) < 16:
                     history_times += (16 - len(history_times)) * [None]
-    
+
                 history_nr = [ x[1] for x in self._history ]
                 if len(history_nr) < 16:
                     history_nr += (16 - len(history_nr)) * [None]
-    
+
                 cursor.execute('INSERT INTO resource_history (rid, time_items0, time_items1, time_items2, time_items3, time_items4, time_items5, time_items6, time_items7, time_items8, time_items9, time_items10, time_items11, time_items12, time_items13, time_items14, time_items15, nr_items0, nr_items1, nr_items2, nr_items3, nr_items4, nr_items5, nr_items6, nr_items7, nr_items8, nr_items9, nr_items10, nr_items11, nr_items12, nr_items13, nr_items14, nr_items15) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                                tuple([self._id] + history_times + history_nr))
-    
+
                 i = first_item_id
                 for item in items:
                     cursor.execute('INSERT INTO resource_data (rid, seq_nr, published, title, link, guid, descr_plain, descr_xhtml) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
@@ -1361,7 +1369,7 @@ class RSS_Resource:
                                     item.published, item.title, item.link,
                                     item.guid, item.descr_plain, item.descr_xhtml))
                     i += 1
-    
+
             return items, first_item_id, nr_new_items
 
 
@@ -1455,8 +1463,8 @@ class RSS_Resource:
         elif len(self._history) == 1:
             time_span = self._last_updated - self._history[0][0]
 
-            interval = 30*60 + time_span // 3
-            min_interval = 60*60
+            interval = 1*60 + time_span // 3
+            min_interval = 1*60
         elif self._invalid_since:
             time_span = self._last_updated - self._invalid_since
 

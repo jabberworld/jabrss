@@ -23,11 +23,11 @@ from flask.globals import request
 from werkzeug.routing import RequestRedirect
 from werkzeug.exceptions import NotFound
 
-from parserss import RSS_Resource, RSS_Resource_id2url, RSS_Resource_simplify
-from parserss import RSS_Resource_db, RSS_Resource_Cursor
-from parserss import UrlError, init_parserss
+from webrss.parserss import RSS_Resource, RSS_Resource_id2url, RSS_Resource_simplify
+from webrss.parserss import RSS_Resource_db, RSS_Resource_Cursor
+from webrss.parserss import UrlError, init_parserss
 
-from urlrewriter import NullRewriter, UrlRewriter
+from webrss.urlrewriter import NullRewriter, UrlRewriter
 
 app = Flask(__name__)
 app.debug = False
@@ -35,7 +35,7 @@ app.debug = False
 base_dir = os.path.abspath(os.path.dirname(__file__))
 DB_FNAME = os.path.join(base_dir, 'webrss.db')
 init_parserss(db_fname = DB_FNAME,
-              min_interval = 45*60, max_interval = 12*60*60,
+              min_interval = 1*60, max_interval = 12*60*60,
               interval_div = 5)
 
 CHARSET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-*'
@@ -45,7 +45,7 @@ def format_rid(rid):
     s = ''
     while rid:
         s += CHARSET[rid % 64]
-        rid /= 64
+        rid //= 64
     return s
 
 def parse_rid(s):
@@ -153,7 +153,7 @@ def feed(url, rewriter, db=None, templ=app.jinja_env.get_template('feed.html')):
                                         url=resource.url(),
                                         link=channel_info.link,
                                         title=channel_title,
-                                        penalty=100*resource.penalty() / 1024,
+                                        penalty=100*resource.penalty() // 1024,
                                         updated=last_modified,
                                         polled=last_updated,
                                         error_info=error_info,
@@ -177,7 +177,7 @@ class ResourceIterator:
     def __iter__(self):
         return self
 
-    def next(self):
+    def __next__(self):
         while True:
             if self.__iter >= len(self.__rids):
                 raise StopIteration()
@@ -198,17 +198,18 @@ class ResourceIterator:
 class BottomIterator:
     def __init__(self, rids):
         self.__rids = rids
-        self.__iter = 0
+        self.__iter = True
 
     def __iter__(self):
         return self
 
-    def next(self):
-        if self.__iter:
+    def __next__(self):
+        if not self.__iter:
             raise StopIteration()
         else:
-            self.__iter += 1
-            ridlist = map(format_rid, filter(lambda x: x != None, self.__rids))
+            self.__iter = False
+            ridlist = list(map(format_rid,
+                               filter(lambda x: x != None, self.__rids)))
             return app.jinja_env.get_template('bottom.html').render(ridlist=ridlist)
 
 
@@ -221,7 +222,7 @@ def get_url():
         id, content = feed(url, get_rewriter(rewrite))
         response = current_app.response_class(content)
         response.headers['X-Feed-Id'] = format_rid(id)
-    except UrlError, ue:
+    except UrlError as ue:
         response = current_app.response_class(str(ue))
         response.headers['X-Feed-Error'] = str(ue)
 
@@ -232,7 +233,7 @@ def get_url():
 def page(ids='', rewrite=False):
     db = RSS_Resource_db()
     if ids:
-        rids = map(parse_rid, ids.split(','))
+        rids = list(map(parse_rid, ids.split(',')))
     else:
         rids = []
     resources = []
@@ -255,7 +256,7 @@ def page_rewrite(ids=''):
 def addurl(ids=''):
     db = RSS_Resource_db()
     if ids:
-        rids = map(parse_rid, ids.split(','))
+        rids = list(map(parse_rid, ids.split(',')))
     else:
         rids = []
 
@@ -270,7 +271,7 @@ def addurl(ids=''):
     if resource.id() not in rids:
         rids.append(resource.id())
 
-    ridlist = map(format_rid, rids)
+    ridlist = list(map(format_rid, rids))
     raise RequestRedirect(url_for('page', ids=','.join(ridlist)))
 
 @app.route('/opml/<ids>/subscriptions.xml')
@@ -278,7 +279,7 @@ def addurl(ids=''):
 def opml(ids=''):
     db = RSS_Resource_db()
     if ids:
-        rids = map(parse_rid, ids.split(','))
+        rids = list(map(parse_rid, ids.split(',')))
     else:
         rids = []
     items = []

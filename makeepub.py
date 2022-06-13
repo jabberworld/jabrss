@@ -1,6 +1,6 @@
-#!/usr/bin/python
-# Copyright (C) 2013-2014, Christof Meerwald
-# http://jabrss.cmeerw.org
+#!/usr/bin/python3
+# Copyright (C) 2013-2020, Christof Meerwald
+# https://jabrss.cmeerw.org
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -21,9 +21,10 @@ import codecs, getopt, locale, logging, sys, time, uuid
 import lxml.html, requests
 
 from parserss import init_parserss, RSS_Resource, RSS_Resource_db
-from contenttools import extract_content
+from contenttools import extract_content, extract_meta
 from urlrewriter import UrlRewriter
 from zipfile import ZipFile, ZIP_STORED, ZIP_DEFLATED
+from urllib.parse import urljoin
 
 
 HTML_PREFIX = '''<?xml version="1.0" encoding="UTF-8"?>
@@ -113,12 +114,13 @@ logger.setLevel(logging.DEBUG)
 
 uid = str(uuid.uuid4())
 age = 12
+wait = 0
 epubname = uid + '.epub'
 rewrite_db = 'rewrite.db'
 http_headers = {}
 
-opts, args = getopt.getopt(sys.argv[1:], 'a:o:r:u:',
-                           ['age=', 'output=', 'rewrite-db=', 'user-agent='])
+opts, args = getopt.getopt(sys.argv[1:], 'a:o:r:u:w:',
+                           ['age=', 'output=', 'rewrite-db=', 'user-agent=', 'wait='])
 for optname, optval in opts:
     if optname in ('-a', '--age'):
         age = int(optval)
@@ -128,6 +130,8 @@ for optname, optval in opts:
         rewrite_db = optval
     elif optname in ('-u', '--user-agent'):
         http_headers['User-Agent'] = optval
+    elif optname in ('-w', '--wait'):
+        wait = int(optval)
 
 def get_http_session():
     sess = requests.Session()
@@ -164,15 +168,33 @@ for rss in args:
 
         url = rewriter.rewrite(item.link)
 
-        if visited.get(url):
+        if url in visited:
             continue
         visited[url] = True
 
+        ignore = False
+
+        if wait:
+            time.sleep(wait)
         try:
             sess.cookies = requests.cookies.RequestsCookieJar()
-            f = sess.get(url, headers = {'Referer' : url})
+            for i in range(5):
+                f = sess.get(url, headers = {'Referer' : item.link},
+                             allow_redirects = False)
+                if f.status_code >= 300 and f.status_code < 400 and \
+                   'location' in f.headers:
+                    url = urljoin(url, f.headers['location'])
+                    if url in visited:
+                        ignore = True
+                        break
+                    visited[url] = True
+                else:
+                    break
         except requests.RequestException as e:
             logger.info('%s: %s' % (url, str(e)))
+            continue
+
+        if ignore or f.status_code < 200 or f.status_code >= 300:
             continue
 
         if f.encoding:
@@ -180,10 +202,11 @@ for rss in args:
         else:
             parser = None
         html = lxml.html.document_fromstring(f.content, parser)
-        html.make_links_absolute(url)
+        meta = extract_meta(html)
 
         content = []
         for frag in extract_content(html):
+            frag.make_links_absolute(url)
             for elem, attribute, link, pos in frag.iterlinks():
                 if elem.tag in ('a',):
                     pass
@@ -200,13 +223,15 @@ for rss in args:
         if not content:
             continue
 
+        title = meta.title or item.title
+
         pagename = 'p%03d' % (len(pageinfo) + 1,)
         epub.writestr('OPS/%s.html' % (pagename,),
                       (HTML_PREFIX +
-                       PAGE_PREFIX % (item.title,)).encode('utf-8') +
+                       PAGE_PREFIX % (title,)).encode('utf-8') +
                       b'\n'.join(content) +
                       PAGE_SUFFIX.encode('utf-8'))
-        pageinfo.append((channel_info.title, pagename, item.title))
+        pageinfo.append((channel_info.title, pagename, title))
 
 db.close()
 del db
@@ -215,6 +240,8 @@ del db
 resinfo = []
 
 for url, fname in resources.items():
+    if wait:
+        time.sleep(wait)
     try:
         sess.cookies = requests.cookies.RequestsCookieJar()
         f = sess.get(url, headers = {'Referer' : url})
@@ -224,6 +251,9 @@ for url, fname in resources.items():
 
     name, ext = fname.split('.')
     ctype = f.headers.get('content-type', '').split(';')[0]
+    if ctype == 'image/jpg':
+        ctype = 'image/jpeg'
+
     if ctype.startswith('image/'):
         compr = ZIP_STORED
     else:
