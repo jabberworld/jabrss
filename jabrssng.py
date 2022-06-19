@@ -57,8 +57,8 @@ Now there is only one more thing to do before you can use JabRSS: you have to au
 TEXT_HELP = '''\
 Supported commands:
 
-subscribe http://host.domain/path/feed.rss    || add http://host.domain/path/feed.rss
-unsubscribe http://host.domain/path/feed.rss  || del http://host.domain/path/feed.rss
+subscribe   | add | + http://host.domain/path/feed.rss
+unsubscribe | del | - http://host.domain/path/feed.rss
 info http://host.domain/path/feed.rss
 list
 set ( plaintext | chat | headline )
@@ -1623,10 +1623,14 @@ class JabRSSStream(XmppStream):
                     return self._process_subscribe(stanza, user, body[10:])
                 elif body[:4] == 'add ':
                     return self._process_subscribe(stanza, user, body[4:])
+                elif body[:2] == '+ ':
+                    return self._process_subscribe(stanza, user, body[2:])
                 elif body[:12] == 'unsubscribe ':
                     return self._process_unsubscribe(stanza, user, body[12:])
                 elif body[:4] == 'del ':
                     return self._process_unsubscribe(stanza, user, body[4:])
+                elif body[:2] == '- ':
+                    return self._process_unsubscribe(stanza, user, body[2:])
                 elif body[:5] == 'info ':
                     return self._process_info(stanza, user, body[5:])
                 else:
