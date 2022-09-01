@@ -1,0 +1,15 @@
+[Unit]
+Description=Jabber RSS Bot
+After=network.target remote-fs.target nss-lookup.target
+
+[Service]
+User=jabrss
+Group=jabrss
+Type=simple
+ExecStart=etc/jabrss.sh
+WorkingDirectory=/home/jabrss/jabrss
+Restart=always
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

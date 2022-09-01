@@ -220,7 +220,7 @@ class Stanza:
             return elem
 
         def _get_elem(self, tag):
-            for elem in self._xmlnode.getchildren():
+            for elem in self._xmlnode:
                 if elem.tag[:1] == '{' and elem.tag.split('}', 1)[1] == tag:
                     return elem
             return None
@@ -303,7 +303,7 @@ class Stanza:
             return self._create_elem(ns, tag)
 
         def get_child(self):
-            children = self._xmlnode.getchildren()[:1]
+            children = list(self._xmlnode)[:1]
             if len(children):
                 return children[0]
             return None

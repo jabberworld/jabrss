@@ -1163,7 +1163,8 @@ class JabRSSStream(XmppStream):
         result = yield 'roster'
         log_message('roster retrieved')
         query = result.get_query()
-        self.roster_updated(query.getchildren())
+        self.roster_updated(list(query))
+#        self.roster_updated(query.getchildren())
 
         log_message('sending presence')
         presence = Stanza.Presence()

@@ -1463,8 +1463,8 @@ class RSS_Resource:
         elif len(self._history) == 1:
             time_span = self._last_updated - self._history[0][0]
 
-            interval = 1*60 + time_span // 3
-            min_interval = 1*60
+            interval = 30*60 + time_span // 3
+            min_interval = 60*60
         elif self._invalid_since:
             time_span = self._last_updated - self._invalid_since
 
