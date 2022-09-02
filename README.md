@@ -8,15 +8,15 @@ The complete source code is available from the JabRSS repository ( http://svn.cm
 
 #### Requirements for Running JabRSS
 
-* Python >= 2.6 or Python >= 3 (tested with Python 2.7 and Python 3.2)
+* Python >= 2.6 or Python >= 3 (tested with Python 2.7 and Python 3.9)
 * python-lxml is highly recommended
 
 
 ### Summary of Commands
 
-* `subscribe http://host.domain/path/to/file.rss` -- subscribe to the given RSS URL
+* `subscribe|add|+ http://host.domain/path/to/file.rss` -- subscribe to the given RSS URL
 
-* `unsubscribe http://host.domain/path/to/file.rss` -- unsubscribe from the given RSS URL
+* `unsubscribe|del|- http://host.domain/path/to/file.rss` -- unsubscribe from the given RSS URL
 
 * `list` -- list currently subscribed RSS URLs (if a URL is marked with "error" it means that the last update of the RSS resource failed for some reason)
 
